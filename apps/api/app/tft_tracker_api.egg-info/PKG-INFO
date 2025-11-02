@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: tft-tracker-api
+Version: 0.1.0
+Summary: FastAPI backend for Tit-for-Tat Asset Tracker MVP
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.109.0
+Requires-Dist: uvicorn[standard]>=0.25.0
+Requires-Dist: sqlalchemy>=2.0.25
+Requires-Dist: alembic>=1.13.1
+Requires-Dist: psycopg[binary]>=3.1.16
+Requires-Dist: pydantic-settings>=2.2.1
+Requires-Dist: httpx>=0.26.0
+Requires-Dist: pandas>=2.1.4
+Requires-Dist: numpy>=1.26.3
+Requires-Dist: yfinance>=0.2.37
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.4; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.3; extra == "dev"
+Requires-Dist: httpx>=0.26.0; extra == "dev"
+Requires-Dist: ruff>=0.1.9; extra == "dev"
+Requires-Dist: mypy>=1.8.0; extra == "dev"
+Requires-Dist: types-requests>=2.31.0.6; extra == "dev"

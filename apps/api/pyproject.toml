@@ -1,0 +1,46 @@
+[project]
+name = "tft-tracker-api"
+version = "0.1.0"
+description = "FastAPI backend for Tit-for-Tat Asset Tracker MVP"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.25.0",
+    "sqlalchemy>=2.0.25",
+    "alembic>=1.13.1",
+    "psycopg[binary]>=3.1.16",
+    "pydantic-settings>=2.2.1",
+    "httpx>=0.26.0",
+    "pandas>=2.1.4",
+    "numpy>=1.26.3",
+    "yfinance>=0.2.37"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.4",
+    "pytest-asyncio>=0.23.3",
+    "httpx>=0.26.0",
+    "ruff>=0.1.9",
+    "mypy>=1.8.0",
+    "types-requests>=2.31.0.6"
+]
+
+[tool.setuptools.packages.find]
+where = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
