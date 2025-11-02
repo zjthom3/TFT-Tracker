@@ -40,6 +40,8 @@ uvicorn app.main:app --reload
 # Frontend setup
 cd ../web
 pnpm install
+# optional: override API base URL for the dashboard
+export NEXT_PUBLIC_API_BASE="http://localhost:8000"
 pnpm dev
 ```
 
@@ -47,10 +49,12 @@ pnpm dev
 ```bash
 curl -X POST http://localhost:8000/ingest/run
 ```
-This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing market and indicator snapshots.
+This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing market and indicator snapshots and recalculating their current Tit-for-Tat phase state.
 
 ## CI
 GitHub Actions run linting and tests for both services on pull requests.
 
 ## Environment
 Default environment variables are defined in `apps/api/app/config.py`. Override via `.env` files or shell environment.
+
+Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`).

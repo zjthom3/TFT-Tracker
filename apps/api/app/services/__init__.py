@@ -1,1 +1,1 @@
-__all__ = ["ingest_market", "indicators"]
+__all__ = ["ingest_market", "indicators", "classify_phase"]

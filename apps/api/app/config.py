@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     ingest_tickers: Sequence[str] = ("NVDA", "BTC-USD")
     ingest_window_days: int = 7
     ingest_interval_minutes: int = 1
+    allowed_origins: Sequence[str] = (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    )
 
 
 @lru_cache

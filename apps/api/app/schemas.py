@@ -29,6 +29,8 @@ class IngestResult(BaseModel):
     ingested_at: datetime = Field(..., description="Timestamp of the newest snapshot stored")
     market_records: int = Field(..., description="Number of market snapshots inserted")
     indicator_records: int = Field(..., description="Number of indicator snapshots inserted")
+    phase: str | None = Field(default=None, description="Latest detected phase after ingest")
+    phase_confidence: float | None = Field(default=None, description="Confidence for the detected phase")
 
 
 class MarketSnapshotRead(BaseModel):
@@ -54,3 +56,25 @@ class IndicatorSnapshotRead(BaseModel):
     macd: float | None = None
     macd_signal: float | None = None
     atr_14: float | None = None
+
+
+class PhaseStateRead(BaseModel):
+    asset_id: UUID
+    ticker: str
+    asset_name: str | None = None
+    asset_type: str
+    phase: str
+    confidence: float | None = None
+    rationale: str | None = None
+    computed_at: datetime
+
+
+class PhaseHistoryRead(BaseModel):
+    id: UUID
+    asset_id: UUID
+    ticker: str
+    from_phase: str | None = None
+    to_phase: str
+    confidence: float | None = None
+    rationale: str | None = None
+    changed_at: datetime

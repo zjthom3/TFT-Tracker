@@ -3,6 +3,7 @@ import logging
 
 from app.config import get_settings
 from app.db.session import SessionLocal
+from app.services.classify_phase import PhaseUpdateService
 from app.services.ingest_market import MarketIngestor
 
 log = logging.getLogger(__name__)
@@ -15,7 +16,10 @@ async def poll_market_data() -> None:
         try:
             with SessionLocal() as session:
                 ingestor = MarketIngestor(session=session, window_days=settings.ingest_window_days)
-                ingestor.ingest_many(settings.ingest_tickers)
+                summaries = ingestor.ingest_many(settings.ingest_tickers)
+                PhaseUpdateService(session).update_assets_by_ticker(settings.ingest_tickers)
+                session.commit()
+                log.debug("Ingest summaries: %s", summaries)
         except Exception as exc:  # pragma: no cover - background logging
             log.exception("Scheduled ingest failed: %s", exc)
         await asyncio.sleep(interval)

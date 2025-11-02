@@ -65,6 +65,12 @@ class Asset(Base):
 
     market_snapshots: Mapped[list["MarketSnapshot"]] = relationship(back_populates="asset")
     indicator_snapshots: Mapped[list["IndicatorSnapshot"]] = relationship(back_populates="asset")
+    phase_state: Mapped[Optional["PhaseState"]] = relationship(
+        back_populates="asset", uselist=False, cascade="all, delete-orphan"
+    )
+    phase_history: Mapped[list["PhaseHistory"]] = relationship(
+        back_populates="asset", cascade="all, delete-orphan", order_by="PhaseHistory.changed_at"
+    )
 
 
 class MarketSnapshot(Base):
@@ -108,3 +114,37 @@ class IndicatorSnapshot(Base):
 
     asset: Mapped[Asset] = relationship(back_populates="indicator_snapshots")
     market_snapshot: Mapped[MarketSnapshot] = relationship(back_populates="indicator_snapshot")
+
+
+class PhaseState(Base):
+    __tablename__ = "phase_state"
+
+    asset_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True
+    )
+    phase: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(Float)
+    rationale: Mapped[Optional[str]] = mapped_column(String(512))
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    asset: Mapped[Asset] = relationship(back_populates="phase_state")
+
+
+class PhaseHistory(Base):
+    __tablename__ = "phase_history"
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    asset_id: Mapped[UUID] = mapped_column(
+        GUID(), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
+    from_phase: Mapped[Optional[str]] = mapped_column(String(16))
+    to_phase: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[Optional[float]] = mapped_column(Float)
+    rationale: Mapped[Optional[str]] = mapped_column(String(512))
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    asset: Mapped[Asset] = relationship(back_populates="phase_history")
