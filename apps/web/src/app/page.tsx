@@ -4,19 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AssetCard, type AssetCardProps } from "@/components/AssetCard";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
+import { ExplainModal } from "@/components/ExplainModal";
+import type { PhaseState } from "@/types/phase";
 
-type PhaseState = {
-  ticker: string;
-  display_ticker?: string | null;
-  asset_name?: string | null;
-  asset_type: string;
-  phase: string;
-  confidence?: number | null;
-  rationale?: string | null;
-  computed_at: string;
-  sentiment_score?: number | null;
-  sentiment_delta?: number | null;
-};
+
 
 type MarketSnapshot = {
   ticker: string;
@@ -41,7 +32,7 @@ export default function HomePage() {
   const [marketSnapshots, setMarketSnapshots] = useState<MarketSnapshot[]>([]);
   const [indicatorSnapshots, setIndicatorSnapshots] = useState<IndicatorSnapshot[]>([]);
   const [assetDirectory, setAssetDirectory] = useState<{ ticker: string; display_ticker?: string | null; name?: string | null; type?: string | null }[]>([]);
-  const [watchlist, setWatchlist] = useState<string[]>(["NVDA", "BTC-USD"]);
+  const [watchlist, setWatchlist] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -49,7 +40,37 @@ export default function HomePage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [phaseAlerts, setPhaseAlerts] = useState<{ ticker: string; from: string | null; to: string; computedAt: string }[]>([]);
-  const [displayOverrides, setDisplayOverrides] = useState<Record<string, string>>({});
+const [displayOverrides, setDisplayOverrides] = useState<Record<string, string>>({});
+const [modalTicker, setModalTicker] = useState<string | null>(null);
+const [sessionToken, setSessionToken] = useState<string | null>(null);
+const [sessionReady, setSessionReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const existing = window.localStorage.getItem("tft-session-token");
+    if (existing) {
+      setSessionToken(existing);
+      setSessionReady(true);
+      return;
+    }
+    const createSession = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/auth/guest`, { method: "POST" });
+        if (!response.ok) {
+          throw new Error("Failed to create guest session");
+        }
+        const data = (await response.json()) as { session_token: string };
+        window.localStorage.setItem("tft-session-token", data.session_token);
+        setSessionToken(data.session_token);
+      } catch (err) {
+        console.error("Unable to create session", err);
+        setFeedback({ type: "error", message: "Unable to create session." });
+      } finally {
+        setSessionReady(true);
+      }
+    };
+    createSession();
+  }, []);
   const phaseMapRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -95,6 +116,20 @@ export default function HomePage() {
     window.localStorage.setItem("tft-watchlist-display", JSON.stringify(displayOverrides));
   }, [displayOverrides, hydrated]);
 
+  const authorizedFetch = useCallback(
+    async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (!sessionReady) {
+        throw new Error("Session not ready");
+      }
+      const headers = new Headers(init.headers as HeadersInit | undefined);
+      if (sessionToken) {
+        headers.set("X-Session-Token", sessionToken);
+      }
+      return fetch(input, { ...init, headers });
+    },
+    [sessionReady, sessionToken]
+  );
+
   const track = useCallback((event: string, payload: Record<string, unknown>) => {
     const body = { event, payload, timestamp: new Date().toISOString() };
     if (process.env.NODE_ENV !== "production") {
@@ -135,14 +170,52 @@ export default function HomePage() {
     }
   }, []);
 
+  const fetchWatchlist = useCallback(async () => {
+    if (!sessionToken) return;
+    try {
+      const response = await authorizedFetch(`${API_BASE}/watchlist`);
+      if (!response.ok) {
+        throw new Error("Failed to load watchlist");
+      }
+      const payload = (await response.json()) as {
+        ticker: string;
+        display_ticker?: string | null;
+        name?: string | null;
+        type: string;
+      }[];
+      if (payload.length === 0) {
+        setWatchlist([]);
+        return;
+      }
+      const canonicalTickers = payload.map((item) => item.ticker.toUpperCase());
+      const overrides: Record<string, string> = {};
+      payload.forEach((item) => {
+        if (item.display_ticker && item.display_ticker.toUpperCase() !== item.ticker.toUpperCase()) {
+          overrides[item.ticker.toUpperCase()] = item.display_ticker.toUpperCase();
+        }
+      });
+      setDisplayOverrides((prev) => ({ ...prev, ...overrides }));
+      setWatchlist(canonicalTickers);
+    } catch (err) {
+      console.error("Unable to load watchlist", err);
+      setFeedback({ type: "error", message: "Unable to load saved watchlist." });
+    }
+  }, [authorizedFetch, sessionToken]);
+
   useEffect(() => {
     loadAssetsDirectory();
   }, [loadAssetsDirectory]);
 
+  useEffect(() => {
+    if (!sessionToken) return;
+    fetchWatchlist();
+  }, [fetchWatchlist, sessionToken]);
+
   const triggerIngest = useCallback(
     async (tickers: string[]) => {
+      if (!sessionReady) return;
       try {
-        const response = await fetch(`${API_BASE}/ingest/run`, {
+        const response = await authorizedFetch(`${API_BASE}/ingest/run`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tickers })
@@ -155,7 +228,7 @@ export default function HomePage() {
         setFeedback({ type: "error", message: "Unable to trigger ingest for new ticker." });
       }
     },
-    []
+    [authorizedFetch, sessionReady]
   );
 
   const loadData = useCallback(async () => {
@@ -252,8 +325,9 @@ export default function HomePage() {
   }, [phaseAlerts]);
 
   const ensureAssetExists = useCallback(async (ticker: string) => {
+    if (!sessionReady) throw new Error("Session not ready");
     try {
-      const response = await fetch(`${API_BASE}/assets`, {
+      const response = await authorizedFetch(`${API_BASE}/assets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -270,7 +344,7 @@ export default function HomePage() {
     } catch (err) {
       throw err instanceof Error ? err : new Error("Asset registration failed");
     }
-  }, []);
+  }, [authorizedFetch, sessionReady]);
 
   const handleAddTicker = useCallback(
     async (inputTicker: string) => {
@@ -293,6 +367,15 @@ export default function HomePage() {
 
         const displayTicker = asset.display_ticker?.toUpperCase() ?? rawTicker;
 
+        const addResponse = await authorizedFetch(`${API_BASE}/watchlist`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker: rawTicker })
+        });
+        if (!addResponse.ok) {
+          const message = await addResponse.text();
+          throw new Error(message || "Unable to persist watchlist item");
+        }
         setWatchlist((prev) => [...prev, canonicalTicker]);
         if (displayTicker !== canonicalTicker) {
           setDisplayOverrides((prev) => ({ ...prev, [canonicalTicker]: displayTicker }));
@@ -310,7 +393,7 @@ export default function HomePage() {
         setAddBusy(false);
       }
     },
-    [ensureAssetExists, loadData, track, triggerIngest, watchlist]
+    [authorizedFetch, ensureAssetExists, loadData, track, triggerIngest, watchlist]
   );
 
   const handleRemoveTicker = useCallback(
@@ -323,8 +406,15 @@ export default function HomePage() {
         const { [ticker]: _ignored, ...rest } = prev;
         return rest;
       });
+      if (!sessionToken) return;
+      void authorizedFetch(`${API_BASE}/watchlist/${ticker}`, {
+        method: "DELETE"
+      }).catch((err) => {
+        console.error("Failed to remove watchlist item", err);
+        setFeedback({ type: "error", message: "Unable to sync removal." });
+      });
     },
-    [track]
+    [authorizedFetch, sessionToken, track]
   );
 
   const handleMoveTicker = useCallback(
@@ -336,11 +426,21 @@ export default function HomePage() {
         if (targetIndex < 0 || targetIndex >= prev.length) return prev;
         const next = [...prev];
         [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+        if (sessionToken) {
+          void authorizedFetch(`${API_BASE}/watchlist/order`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tickers: next })
+          }).catch((err) => {
+            console.error("Failed to reorder watchlist", err);
+            setFeedback({ type: "error", message: "Unable to update order." });
+          });
+        }
+        track("watchlist_move", { ticker, direction });
         return next;
       });
-      track("watchlist_move", { ticker, direction });
     },
-    [track]
+    [authorizedFetch, sessionToken, track]
   );
 
   const marketByTicker = useMemo(
@@ -461,7 +561,7 @@ export default function HomePage() {
         onAdd={handleAddTicker}
         onRemove={handleRemoveTicker}
         onMove={handleMoveTicker}
-        busy={addBusy}
+        busy={addBusy || !sessionReady}
         error={formError}
         displayOverrides={displayOverrides}
       />
@@ -479,10 +579,11 @@ export default function HomePage() {
       ) : (
         <section className="grid gap-6 md:grid-cols-2">
           {cards.map((card) => (
-            <AssetCard key={card.ticker} {...card} />
+            <AssetCard key={card.ticker} {...card} onExplain={setModalTicker} />
           ))}
         </section>
       )}
+      {modalTicker && <ExplainModal ticker={modalTicker} onClose={() => setModalTicker(null)} />}
     </main>
   );
 }

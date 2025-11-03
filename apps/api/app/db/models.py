@@ -76,6 +76,9 @@ class Asset(Base):
     sentiment_observations: Mapped[list["SentimentObservation"]] = relationship(
         back_populates="asset", cascade="all, delete-orphan"
     )
+    watchlist_entries: Mapped[list["UserAsset"]] = relationship(
+        back_populates="asset", cascade="all, delete-orphan"
+    )
 
 
 class MarketSnapshot(Base):
@@ -188,3 +191,40 @@ class SentimentObservation(Base):
 
     asset: Mapped[Asset] = relationship(back_populates="sentiment_observations")
     source: Mapped[SentimentSource] = relationship(back_populates="observations")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    session_token: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    watchlist_items: Mapped[list["UserAsset"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserAsset(Base):
+    __tablename__ = "user_asset"
+    __table_args__ = (UniqueConstraint("user_id", "asset_id", name="uq_user_asset_unique"),)
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    display_order: Mapped[Optional[int]] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    user: Mapped[User] = relationship(back_populates="watchlist_items")
+    asset: Mapped[Asset] = relationship(back_populates="watchlist_entries")

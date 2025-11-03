@@ -87,3 +87,23 @@ class PhaseHistoryRead(BaseModel):
 
 class IngestRequest(BaseModel):
     tickers: list[str] | None = Field(default=None, description="Optional list of tickers to ingest")
+
+
+class GuestSession(BaseModel):
+    session_token: str
+
+
+class WatchlistItem(BaseModel):
+    ticker: str
+    display_ticker: str | None = None
+    name: str | None = None
+    type: str
+    order: int | None = None
+
+
+class WatchlistAdd(BaseModel):
+    ticker: str = Field(..., description="Ticker or alias to add")
+
+
+class WatchlistOrder(BaseModel):
+    tickers: list[str] = Field(..., description="Canonical tickers in desired order")

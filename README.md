@@ -57,10 +57,18 @@ curl -X POST http://localhost:8000/ingest/run \
 ```
 This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing market and indicator snapshots and recalculating their current Tit-for-Tat phase state.
 
+### Authentication & Sessions
+- Request a guest session token:
+  ```bash
+  curl -X POST http://localhost:8000/auth/guest
+  ```
+  Persist the returned `session_token` in the client and send it with the `X-Session-Token` header on watchlist-related requests.
+- Watchlist mutations (`/watchlist`, `/watchlist/order`) require the session token and keep your list synced between devices.
+
 ### Watchlist Tips
-- The dashboard defaults to tracking `NVDA` and `BTC-USD`. Edit the watchlist from the UI; entries persist in `localStorage`.
-- Each addition calls the `/assets` endpoint (creating the asset if it does not exist) and future ingests will populate snapshots automatically.
-- Common crypto aliases automatically resolve to the canonical Yahoo symbol (e.g. `TRUMP-USD` → `TRUMP35336-USD`).
+- The first time you open the app a guest session token (`X-Session-Token`) is issued automatically; watchlist changes are stored against that session server-side and mirrored locally.
+- Add tickers directly from the UI; the backend resolves aliases and ensures the canonical Yahoo Finance symbol exists before triggering an ingest.
+- Common crypto aliases automatically resolve to the canonical Yahoo symbol (e.g. `TRUMP-USD` → `TRUMP35336-USD`) while retaining the user-friendly label.
 
 ## CI
 GitHub Actions run linting and tests for both services on pull requests.
@@ -75,6 +83,7 @@ Default environment variables are defined in `apps/api/app/config.py`. Override 
 | `TFT_ENABLE_PHASE_ALERTS` | Enable server-side alert processing | `true` |
 | `TFT_REQUESTS_PER_MINUTE` | In-memory rate limit (per IP) | `120` |
 | `TFT_SENTRY_DSN` | Optional DSN for Sentry error/trace monitoring | _unset_ |
+| `TFT_REDIS_URL` | Optional Redis connection for shared rate limiting | _unset_ |
 
 Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`), phase alerts via `NEXT_PUBLIC_PHASE_ALERTS`, and optional telemetry endpoint via `NEXT_PUBLIC_ANALYTICS_URL`.
 

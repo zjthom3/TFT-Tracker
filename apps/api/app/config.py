@@ -28,6 +28,7 @@ class Settings(BaseSettings):
             "TRUMP-USD": "TRUMP35336-USD",
         }
     )
+    redis_url: str | None = None
 
 
 @lru_cache

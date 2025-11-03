@@ -10,6 +10,7 @@
 - [ ] Add tickers (e.g., `NVDA`, `BTC-USD`) via watchlist panel; duplicates are rejected gracefully
 - [ ] Watchlist reorder (Move up/down) immediately updates card ordering
 - [ ] Removing a ticker updates cards and persists after refresh
+- [ ] New guest sessions receive a `X-Session-Token`; watchlist persists after refresh using the same token
 - [ ] Manual ingest (`curl -X POST http://localhost:8000/ingest/run`) updates price/indicator data and phase rationale
 - [ ] Phase alerts banner appears on phase transition, then auto-dismisses
 - [ ] Sentiment score logged in ingest response and influences phase rationale (negative sentiment increases DEFECT odds)

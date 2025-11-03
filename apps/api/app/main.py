@@ -10,7 +10,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from app.config import get_settings
 from app.db.session import init_database
 from app.jobs.scheduler import poll_market_data
-from app.routers import assets, health, ingest, phase, snapshots
+from app.routers import assets, auth, health, ingest, phase, snapshots, watchlist
 
 
 def create_app(init_db: bool = True) -> FastAPI:
@@ -51,7 +51,9 @@ def create_app(init_db: bool = True) -> FastAPI:
     )
 
     application.include_router(health.router, tags=["health"])
+    application.include_router(auth.router, tags=["auth"])
     application.include_router(assets.router, prefix="/assets", tags=["assets"])
+    application.include_router(watchlist.router, tags=["watchlist"])
     application.include_router(ingest.router, prefix="/ingest", tags=["ingest"])
     application.include_router(phase.router, tags=["phase"])
     application.include_router(snapshots.router, tags=["snapshots"])

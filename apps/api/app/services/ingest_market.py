@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, IndicatorSnapshot, MarketSnapshot
 from app.services.indicators import compute_atr, compute_macd, compute_rsi
+from app.utils.assets import get_or_create_asset
 from app.utils.tickers import resolve_ticker
 
 
@@ -37,8 +38,8 @@ class MarketIngestor:
         return summaries
 
     def ingest_single(self, ticker: str) -> IngestSummary | None:
-        canonical, display = resolve_ticker(ticker)
-        asset = self._ensure_asset(canonical, display)
+        canonical, _ = resolve_ticker(ticker)
+        asset = get_or_create_asset(self.session, canonical)
         frame = self._fetch_price_history(canonical)
         if frame.empty:
             return None
@@ -105,26 +106,6 @@ class MarketIngestor:
         except TypeError:
             return None
         return float(value)
-
-    def _ensure_asset(self, ticker: str, display: str | None) -> Asset:
-        normalized = ticker.upper()
-        stmt = select(Asset).where(Asset.ticker == normalized)
-        asset = self.session.scalars(stmt).first()
-        if asset:
-            if display and asset.display_ticker != display:
-                asset.display_ticker = display
-                self.session.add(asset)
-            return asset
-
-        asset = Asset(
-            ticker=normalized,
-            display_ticker=display,
-            type="crypto" if normalized.endswith("-USD") else "stock",
-        )
-        self.session.add(asset)
-        self.session.flush()
-        self.session.refresh(asset)
-        return asset
 
     def _fetch_price_history(self, ticker: str) -> pd.DataFrame:
         data = yf.download(

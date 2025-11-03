@@ -10,8 +10,10 @@
   - `TFT_ENABLE_PHASE_ALERTS`
   - `TFT_REQUESTS_PER_MINUTE`
   - `TFT_SENTRY_DSN` (optional but recommended)
+  - `TFT_REDIS_URL` (optional shared rate limiter)
 - [ ] Frontend: set `NEXT_PUBLIC_API_BASE`, `NEXT_PUBLIC_PHASE_ALERTS`
   - Optional: `NEXT_PUBLIC_ANALYTICS_URL`
+- [ ] Apply latest migrations including `202511031142_add_display_ticker` and `202511031548_create_user_tables`
 - [ ] Run test & lint suites:
   - `source apps/api/.venv/bin/activate && pytest`
   - `cd apps/web && pnpm lint`

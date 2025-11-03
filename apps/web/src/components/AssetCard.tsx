@@ -16,6 +16,7 @@ export type AssetCardProps = {
   statusMessage?: string | null;
   sentimentScore?: number | null;
   sentimentDelta?: number | null;
+  onExplain?: (ticker: string) => void;
 };
 
 function formatNumber(value: number | null | undefined, digits = 2): string {
@@ -40,7 +41,8 @@ export function AssetCard(props: AssetCardProps) {
     volatility,
     statusMessage,
     sentimentScore,
-    sentimentDelta
+    sentimentDelta,
+    onExplain
   } = props;
 
   const updatedDistance = updatedAt
@@ -104,8 +106,17 @@ export function AssetCard(props: AssetCardProps) {
         </p>
       )}
 
-      <div className="mt-4 text-xs text-neutral-500">
-        Updated {updatedAt ? new Date(updatedAt).toLocaleString() : "once data is available"}
+      <div className="mt-4 flex items-center justify-between text-xs text-neutral-500">
+        <span>Updated {updatedAt ? new Date(updatedAt).toLocaleString() : "once data is available"}</span>
+        {onExplain && (
+          <button
+            type="button"
+            onClick={() => onExplain(ticker)}
+            className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-medium text-neutral-200 transition hover:border-neutral-500 focus:outline-none focus:ring-2 focus:ring-coop/40"
+          >
+            Explain
+          </button>
+        )}
       </div>
     </article>
   );

@@ -8,6 +8,11 @@ from fastapi import HTTPException, Request, status
 
 from app.config import get_settings
 
+try:  # pragma: no cover - optional redis dependency
+    import redis  # type: ignore
+except ImportError:  # pragma: no cover
+    redis = None
+
 RateBucket = Tuple[int, int]
 
 
@@ -42,7 +47,50 @@ class InMemoryRateLimiter:
 
 
 settings = get_settings()
-rate_limiter = InMemoryRateLimiter(max_requests=settings.requests_per_minute)
+
+
+class RedisRateLimiter:
+    def __init__(self, client: "redis.Redis[Any, Any]", max_requests: int, window_seconds: int = 60) -> None:
+        self.client = client
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+
+    def check(self, key: str) -> None:
+        redis_key = f"rate:{key}"
+        with self.client.pipeline() as pipe:
+            while True:
+                try:
+                    pipe.watch(redis_key)
+                    current = pipe.get(redis_key)
+                    if current is None:
+                        pipe.multi()
+                        pipe.setex(redis_key, self.window_seconds, 1)
+                        pipe.execute()
+                        return
+                    count = int(current)
+                    if count >= self.max_requests:
+                        ttl = self.client.ttl(redis_key)
+                        reset_in = ttl if ttl and ttl > 0 else self.window_seconds
+                        raise HTTPException(
+                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail=f"Rate limit exceeded. Try again in {reset_in}s.",
+                        )
+                    pipe.multi()
+                    pipe.incr(redis_key)
+                    pipe.execute()
+                    return
+                except redis.WatchError:  # type: ignore[attr-defined]
+                    continue
+
+
+if settings.redis_url and redis is not None:
+    try:
+        redis_client = redis.from_url(settings.redis_url)  # type: ignore[attr-defined]
+        rate_limiter = RedisRateLimiter(redis_client, max_requests=settings.requests_per_minute)
+    except Exception:  # pragma: no cover - fallback to memory
+        rate_limiter = InMemoryRateLimiter(max_requests=settings.requests_per_minute)
+else:
+    rate_limiter = InMemoryRateLimiter(max_requests=settings.requests_per_minute)
 
 
 def enforce_rate_limit(request: Request) -> None:

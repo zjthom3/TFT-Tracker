@@ -8,7 +8,7 @@ from app.db.models import Asset
 from app.db.session import get_session
 from app.schemas import AssetCreate, AssetRead
 from app.dependencies.rate_limit import enforce_rate_limit
-from app.utils.tickers import resolve_ticker
+from app.utils.assets import get_or_create_asset
 
 router = APIRouter()
 
@@ -28,26 +28,13 @@ def create_asset(
     session: Session = Depends(get_session),
     _: None = Depends(enforce_rate_limit),
 ) -> Asset:
-    canonical, display = resolve_ticker(payload.ticker)
-
-    exists_stmt = select(Asset).where(Asset.ticker == canonical, Asset.type == payload.type)
-    existing = session.scalars(exists_stmt).first()
-    if existing:
-        if display and existing.display_ticker != display:
-            existing.display_ticker = display
-            session.add(existing)
-            session.flush()
-            session.refresh(existing)
-        return existing
-
-    asset = Asset(
-        ticker=canonical,
-        display_ticker=display,
+    asset = get_or_create_asset(
+        session,
+        payload.ticker,
+        asset_type_hint=payload.type,
         name=payload.name,
-        type=payload.type,
         exchange=payload.exchange,
     )
-    session.add(asset)
     session.flush()
     session.refresh(asset)
     return asset
