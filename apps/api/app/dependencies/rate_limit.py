@@ -13,9 +13,17 @@ RateBucket = Tuple[int, int]
 
 class InMemoryRateLimiter:
     def __init__(self, max_requests: int, window_seconds: int = 60) -> None:
-        self.max_requests = max_requests
+        self._max_requests = max_requests
         self.window_seconds = window_seconds
         self.counters: DefaultDict[str, RateBucket] = defaultdict(lambda: (0, 0))
+
+    @property
+    def max_requests(self) -> int:
+        return self._max_requests
+
+    @max_requests.setter
+    def max_requests(self, value: int) -> None:
+        self._max_requests = value
 
     def check(self, key: str) -> None:
         now = int(time.time())
@@ -25,7 +33,7 @@ class InMemoryRateLimiter:
             count = 0
         count += 1
         self.counters[key] = (count, window)
-        if count > self.max_requests:
+        if count > self._max_requests:
             reset_in = (stored_window + 1) * self.window_seconds - now
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,

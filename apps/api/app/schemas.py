@@ -68,6 +68,8 @@ class PhaseStateRead(BaseModel):
     confidence: float | None = None
     rationale: str | None = None
     computed_at: datetime
+    sentiment_score: float | None = None
+    sentiment_delta: float | None = None
 
 
 class PhaseHistoryRead(BaseModel):
@@ -79,3 +81,7 @@ class PhaseHistoryRead(BaseModel):
     confidence: float | None = None
     rationale: str | None = None
     changed_at: datetime
+
+
+class IngestRequest(BaseModel):
+    tickers: list[str] | None = Field(default=None, description="Optional list of tickers to ingest")

@@ -94,7 +94,18 @@ class PhaseClassifier:
         )
 
         computed_at = current_market.as_of
-        return PhaseResult(phase=phase, confidence=confidence, rationale=rationale, computed_at=computed_at)
+        rationale_parts = [rationale]
+        if self.settings.enable_sentiment and sentiment_current is not None:
+            sentiment_line = f"Sentiment score {sentiment_current:+.2f}"
+            if sentiment_previous is not None:
+                sentiment_line += f" (prev {sentiment_previous:+.2f})"
+            if sentiment_stale:
+                sentiment_line += " — signal aging"
+            rationale_parts.append(sentiment_line)
+
+        final_rationale = " | ".join(filter(None, rationale_parts))
+
+        return PhaseResult(phase=phase, confidence=confidence, rationale=final_rationale, computed_at=computed_at)
 
     def _determine_phase(
         self,

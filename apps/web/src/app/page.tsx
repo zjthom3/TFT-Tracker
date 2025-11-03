@@ -13,6 +13,8 @@ type PhaseState = {
   confidence?: number | null;
   rationale?: string | null;
   computed_at: string;
+  sentiment_score?: number | null;
+  sentiment_delta?: number | null;
 };
 
 type MarketSnapshot = {
@@ -31,6 +33,7 @@ type IndicatorSnapshot = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const PHASE_ALERTS_ENABLED = process.env.NEXT_PUBLIC_PHASE_ALERTS !== "false";
+const ANALYTICS_ENDPOINT = process.env.NEXT_PUBLIC_ANALYTICS_URL ?? "";
 
 export default function HomePage() {
   const [phaseStates, setPhaseStates] = useState<PhaseState[]>([]);
@@ -69,8 +72,21 @@ export default function HomePage() {
   }, [hydrated, watchlist]);
 
   const track = useCallback((event: string, payload: Record<string, unknown>) => {
+    const body = { event, payload, timestamp: new Date().toISOString() };
     if (process.env.NODE_ENV !== "production") {
       console.debug(`[analytics] ${event}`, payload);
+    }
+    if (!ANALYTICS_ENDPOINT) return;
+    const json = JSON.stringify(body);
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      navigator.sendBeacon(ANALYTICS_ENDPOINT, json);
+    } else {
+      void fetch(ANALYTICS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: json,
+        keepalive: true
+      });
     }
   }, []);
 
@@ -88,6 +104,25 @@ export default function HomePage() {
   useEffect(() => {
     loadAssetsDirectory();
   }, [loadAssetsDirectory]);
+
+  const triggerIngest = useCallback(
+    async (tickers: string[]) => {
+      try {
+        const response = await fetch(`${API_BASE}/ingest/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tickers })
+        });
+        if (!response.ok) {
+          throw new Error(`Ingest failed (${response.status})`);
+        }
+      } catch (err) {
+        console.error("Failed to trigger ingest", err);
+        setFeedback({ type: "error", message: "Unable to trigger ingest for new ticker." });
+      }
+    },
+    []
+  );
 
   const loadData = useCallback(async () => {
     try {
@@ -207,6 +242,8 @@ export default function HomePage() {
         setWatchlist((prev) => [...prev, ticker]);
         setFeedback({ type: "success", message: `${ticker} added to watchlist.` });
         track("watchlist_add", { ticker });
+        await triggerIngest([ticker]);
+        await loadData();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unable to add ticker.";
         setFormError(message);
@@ -215,7 +252,7 @@ export default function HomePage() {
         setAddBusy(false);
       }
     },
-    [ensureAssetExists, track, watchlist]
+    [ensureAssetExists, loadData, track, triggerIngest, watchlist]
   );
 
   const handleRemoveTicker = useCallback(
@@ -281,6 +318,8 @@ export default function HomePage() {
         priceChangePct: market?.price_change_pct ?? null,
         volatility: market?.volatility_1d ?? null,
         rsi: indicator?.rsi_14 ?? null,
+        sentimentScore: phase?.sentiment_score ?? null,
+        sentimentDelta: phase?.sentiment_delta ?? null,
         updatedAt: phase?.computed_at ?? market?.as_of ?? null
       } satisfies AssetCardProps;
     });

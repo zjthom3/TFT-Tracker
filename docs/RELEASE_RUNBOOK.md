@@ -11,6 +11,7 @@
   - `TFT_REQUESTS_PER_MINUTE`
   - `TFT_SENTRY_DSN` (optional but recommended)
 - [ ] Frontend: set `NEXT_PUBLIC_API_BASE`, `NEXT_PUBLIC_PHASE_ALERTS`
+  - Optional: `NEXT_PUBLIC_ANALYTICS_URL`
 - [ ] Run test & lint suites:
   - `source apps/api/.venv/bin/activate && pytest`
   - `cd apps/web && pnpm lint`

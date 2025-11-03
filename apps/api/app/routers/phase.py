@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import Select, desc, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, PhaseHistory, PhaseState
+from app.db.models import Asset, PhaseHistory, PhaseState, SentimentObservation
 from app.db.session import get_session
 from app.schemas import PhaseHistoryRead, PhaseStateRead
 from app.dependencies.rate_limit import enforce_rate_limit
@@ -41,19 +41,49 @@ def list_phase_states(
         if normalized:
             stmt = stmt.where(Asset.ticker.in_(normalized))
     rows = session.execute(stmt).all()
-    return [
-        PhaseStateRead(
-            asset_id=state.asset_id,
-            ticker=asset.ticker,
-            asset_name=asset.name,
-            asset_type=asset.type,
-            phase=state.phase,
-            confidence=state.confidence,
-            rationale=state.rationale,
-            computed_at=state.computed_at,
+    asset_ids = [state.asset_id for state, _ in rows]
+    sentiment_map: dict[str, tuple[float | None, float | None]] = {}
+
+    if asset_ids:
+        observations = session.execute(
+            select(SentimentObservation)
+            .where(SentimentObservation.asset_id.in_(asset_ids))
+            .order_by(SentimentObservation.asset_id, SentimentObservation.observed_at.desc())
+        ).scalars().all()
+
+        per_asset: dict[str, list[SentimentObservation]] = {}
+        for obs in observations:
+            bucket = per_asset.setdefault(str(obs.asset_id), [])
+            if len(bucket) < 2:
+                bucket.append(obs)
+
+        for asset_id, bucket in per_asset.items():
+            latest = bucket[0]
+            previous = bucket[1] if len(bucket) > 1 else None
+            latest_score = float(latest.score) if latest.score is not None else None
+            delta = None
+            if latest_score is not None and previous and previous.score is not None:
+                delta = float(latest.score - previous.score)
+            sentiment_map[asset_id] = (latest_score, delta)
+
+    results: list[PhaseStateRead] = []
+    for state, asset in rows:
+        sentiment_score, sentiment_delta = sentiment_map.get(str(state.asset_id), (None, None))
+        results.append(
+            PhaseStateRead(
+                asset_id=state.asset_id,
+                ticker=asset.ticker,
+                asset_name=asset.name,
+                asset_type=asset.type,
+                phase=state.phase,
+                confidence=state.confidence,
+                rationale=state.rationale,
+                computed_at=state.computed_at,
+                sentiment_score=sentiment_score,
+                sentiment_delta=sentiment_delta,
+            )
         )
-        for state, asset in rows
-    ]
+    return results
 
 
 @router.get("/phase/{ticker}", response_model=PhaseStateRead)
@@ -70,6 +100,19 @@ def get_phase_state(
             detail=f"Phase state not available for {asset.ticker}",
         )
 
+    sentiment_score = None
+    sentiment_delta = None
+    sentiment_rows = session.execute(
+        select(SentimentObservation)
+        .where(SentimentObservation.asset_id == asset.id)
+        .order_by(SentimentObservation.observed_at.desc())
+        .limit(2)
+    ).scalars().all()
+    if sentiment_rows:
+        sentiment_score = float(sentiment_rows[0].score) if sentiment_rows[0].score is not None else None
+        if len(sentiment_rows) > 1 and sentiment_rows[0].score is not None and sentiment_rows[1].score is not None:
+            sentiment_delta = float(sentiment_rows[0].score - sentiment_rows[1].score)
+
     return PhaseStateRead(
         asset_id=asset.id,
         ticker=asset.ticker,
@@ -79,6 +122,8 @@ def get_phase_state(
         confidence=state.confidence,
         rationale=state.rationale,
         computed_at=state.computed_at,
+        sentiment_score=sentiment_score,
+        sentiment_delta=sentiment_delta,
     )
 
 

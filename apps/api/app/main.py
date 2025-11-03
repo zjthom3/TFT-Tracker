@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 
 import sentry_sdk
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.config import get_settings
 from app.db.session import init_database
+from app.jobs.scheduler import poll_market_data
 from app.routers import assets, health, ingest, phase, snapshots
 
 
@@ -23,9 +25,14 @@ def create_app(init_db: bool = True) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        background_task: asyncio.Task | None = None
         if init_db:
             init_database()
+        if settings.ingest_interval_minutes > 0:
+            background_task = asyncio.create_task(poll_market_data())
         yield
+        if background_task:
+            background_task.cancel()
 
     application = FastAPI(
         title=settings.api_title,

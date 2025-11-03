@@ -14,6 +14,7 @@
 - [ ] Phase alerts banner appears on phase transition, then auto-dismisses
 - [ ] Sentiment score logged in ingest response and influences phase rationale (negative sentiment increases DEFECT odds)
 - [ ] Rate limit returns HTTP 429 after exceeding threshold; normal usage remains unaffected
+- [ ] Analytics endpoint (if configured) receives watchlist/phase events (verify via network inspector or logs)
 
 ## Visual / UX
 - [ ] Dashboard renders correctly on mobile (<768px) with stacked cards

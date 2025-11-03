@@ -7,9 +7,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Asset, Base, IndicatorSnapshot, MarketSnapshot, PhaseHistory
+from app.db.models import (
+    Asset,
+    Base,
+    IndicatorSnapshot,
+    MarketSnapshot,
+    PhaseHistory,
+    SentimentObservation,
+    SentimentSource,
+)
 from app.db.session import get_session
-from app.dependencies.rate_limit import enforce_rate_limit
+from app.dependencies.rate_limit import enforce_rate_limit, rate_limiter
 from app.main import create_app
 from app.services.classify_phase import PhaseUpdateService, PHASE_COOP, PHASE_DEFECT, PHASE_FORGIVE
 
@@ -168,6 +176,31 @@ def test_phase_endpoints_with_classification(engine) -> None:
 
     PhaseUpdateService(session).update_asset(asset)
     session.commit()
+
+    source = SentimentSource(name="test-source", channel="news", reliability_tier="B")
+    session.add(source)
+    session.flush()
+    session.add(
+        SentimentObservation(
+            asset_id=asset.id,
+            source_id=source.id,
+            score=0.25,
+            magnitude=0.4,
+            features={"sample_size": 2},
+            observed_at=now,
+        )
+    )
+    session.add(
+        SentimentObservation(
+            asset_id=asset.id,
+            source_id=source.id,
+            score=-0.1,
+            magnitude=0.2,
+            features={"sample_size": 2},
+            observed_at=now - timedelta(minutes=30),
+        )
+    )
+    session.commit()
     session.close()
 
     app = create_app(init_db=False)
@@ -175,6 +208,9 @@ def test_phase_endpoints_with_classification(engine) -> None:
     def override_session() -> Iterator[Session]:
         with TestingSession() as override:
             yield override
+
+    original_limit = rate_limiter.max_requests
+    rate_limiter.max_requests = 1000
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[enforce_rate_limit] = lambda: None
@@ -185,10 +221,21 @@ def test_phase_endpoints_with_classification(engine) -> None:
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["phase"] == PHASE_DEFECT
+    assert payload[0]["sentiment_score"] is not None
 
     detail = client.get("/phase/NVDA").json()
     assert detail["ticker"] == "NVDA"
+    assert detail["sentiment_score"] == pytest.approx(0.25, rel=1e-2)
+    assert detail["sentiment_delta"] == pytest.approx(0.35, rel=1e-2)
 
     history = client.get("/phase/NVDA/history").json()
     assert history and history[0]["to_phase"] == PHASE_DEFECT
     app.dependency_overrides.pop(enforce_rate_limit, None)
+
+    rate_limiter.max_requests = 1
+    first = client.get("/phase/NVDA")
+    assert first.status_code == 200
+    second = client.get("/phase/NVDA")
+    assert second.status_code == 429
+
+    rate_limiter.max_requests = original_limit

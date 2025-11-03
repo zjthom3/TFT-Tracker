@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.models import Asset, Base, IndicatorSnapshot, MarketSnapshot
 from app.db.session import get_session
 from app.main import create_app
-from app.dependencies.rate_limit import enforce_rate_limit
+from app.dependencies.rate_limit import enforce_rate_limit, rate_limiter
 
 
 @pytest.fixture()
@@ -36,6 +36,9 @@ def client() -> Iterator[TestClient]:
     app.dependency_overrides[get_session] = override_get_session
     app.dependency_overrides[enforce_rate_limit] = lambda: None
 
+    original_limit = rate_limiter.max_requests
+    rate_limiter.max_requests = 1000
+
     with TestingSession() as session:
         seed_snapshot_data(session)
 
@@ -44,6 +47,7 @@ def client() -> Iterator[TestClient]:
 
     app.dependency_overrides.pop(get_session, None)
     app.dependency_overrides.pop(enforce_rate_limit, None)
+    rate_limiter.max_requests = original_limit
 
 
 def seed_snapshot_data(session: Session) -> None:

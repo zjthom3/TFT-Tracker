@@ -37,6 +37,8 @@ pip install -e .
 alembic upgrade head
 uvicorn app.main:app --reload
 
+# background ingest worker starts automatically on launch; adjust TFT_ variables to configure cadence
+
 # Frontend setup
 cd ../web
 pnpm install
@@ -48,6 +50,10 @@ pnpm dev
 ### Manual Ingest Seed
 ```bash
 curl -X POST http://localhost:8000/ingest/run
+# or target specific tickers
+curl -X POST http://localhost:8000/ingest/run \
+  -H 'Content-Type: application/json' \
+  -d '{"tickers":["SMCI","TSLA"]}'
 ```
 This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing market and indicator snapshots and recalculating their current Tit-for-Tat phase state.
 
@@ -69,6 +75,6 @@ Default environment variables are defined in `apps/api/app/config.py`. Override 
 | `TFT_REQUESTS_PER_MINUTE` | In-memory rate limit (per IP) | `120` |
 | `TFT_SENTRY_DSN` | Optional DSN for Sentry error/trace monitoring | _unset_ |
 
-Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`) and phase alerts can be toggled via `NEXT_PUBLIC_PHASE_ALERTS`.
+Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`), phase alerts via `NEXT_PUBLIC_PHASE_ALERTS`, and optional telemetry endpoint via `NEXT_PUBLIC_ANALYTICS_URL`.
 
 Operational checklists live under `docs/QA_CHECKLIST.md` and `docs/RELEASE_RUNBOOK.md`.

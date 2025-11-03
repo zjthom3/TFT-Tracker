@@ -13,6 +13,8 @@ export type AssetCardProps = {
   updatedAt?: string | null;
   volatility?: number | null;
   statusMessage?: string | null;
+  sentimentScore?: number | null;
+  sentimentDelta?: number | null;
 };
 
 function formatNumber(value: number | null | undefined, digits = 2): string {
@@ -34,7 +36,9 @@ export function AssetCard(props: AssetCardProps) {
     rsi,
     updatedAt,
     volatility,
-    statusMessage
+    statusMessage,
+    sentimentScore,
+    sentimentDelta
   } = props;
 
   const updatedDistance = updatedAt
@@ -59,7 +63,7 @@ export function AssetCard(props: AssetCardProps) {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <Metric label="Price" value={formatNumber(price)} prefix="$" />
         <Metric
           label="Δ %"
@@ -68,6 +72,22 @@ export function AssetCard(props: AssetCardProps) {
         />
         <Metric label="RSI" value={formatNumber(rsi)} />
         <Metric label="Volatility" value={formatNumber(volatility)} suffix="σ" />
+        <Metric
+          label="Sentiment"
+          value={
+            sentimentScore !== undefined && sentimentScore !== null
+              ? sentimentScore.toFixed(2)
+              : "--"
+          }
+        />
+        <Metric
+          label="Δ Sentiment"
+          value={
+            sentimentDelta !== undefined && sentimentDelta !== null
+              ? sentimentDelta.toFixed(2)
+              : "--"
+          }
+        />
         <Metric label="Last updated" value={updatedDistance} />
       </div>
 
