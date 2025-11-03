@@ -9,6 +9,7 @@ from app.db.session import SessionLocal
 from app.services.classify_phase import PhaseUpdateService
 from app.services.ingest_market import MarketIngestor
 from app.services.sentiment import SentimentIngestor
+from app.utils.tickers import resolve_ticker
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,10 @@ async def poll_market_data() -> None:
             with SessionLocal() as session:
                 asset_rows = session.execute(select(Asset.ticker)).all()
                 dynamic_tickers = {row[0] for row in asset_rows if row[0]}
-                dynamic_tickers.update(t.strip().upper() for t in settings.ingest_tickers if t and t.strip())
+                for ticker in settings.ingest_tickers:
+                    if ticker and ticker.strip():
+                        canonical, _ = resolve_ticker(ticker)
+                        dynamic_tickers.add(canonical)
                 tickers = sorted(dynamic_tickers)
                 if not tickers:
                     await asyncio.sleep(interval)

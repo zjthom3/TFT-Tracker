@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Asset, IndicatorSnapshot, MarketSnapshot
 from app.services.indicators import compute_atr, compute_macd, compute_rsi
+from app.utils.tickers import resolve_ticker
 
 
 @dataclass
@@ -29,14 +30,16 @@ class MarketIngestor:
     def ingest_many(self, tickers: Iterable[str]) -> list[IngestSummary]:
         summaries: list[IngestSummary] = []
         for ticker in tickers:
-            summary = self.ingest_single(ticker)
+            canonical, _ = resolve_ticker(ticker)
+            summary = self.ingest_single(canonical)
             if summary:
                 summaries.append(summary)
         return summaries
 
     def ingest_single(self, ticker: str) -> IngestSummary | None:
-        asset = self._ensure_asset(ticker)
-        frame = self._fetch_price_history(ticker)
+        canonical, display = resolve_ticker(ticker)
+        asset = self._ensure_asset(canonical, display)
+        frame = self._fetch_price_history(canonical)
         if frame.empty:
             return None
 
@@ -87,7 +90,7 @@ class MarketIngestor:
             return None
 
         return IngestSummary(
-            ticker=ticker,
+            ticker=canonical,
             ingested_at=last_timestamp,
             market_records=market_inserted,
             indicator_records=indicator_inserted,
@@ -103,15 +106,19 @@ class MarketIngestor:
             return None
         return float(value)
 
-    def _ensure_asset(self, ticker: str) -> Asset:
+    def _ensure_asset(self, ticker: str, display: str | None) -> Asset:
         normalized = ticker.upper()
         stmt = select(Asset).where(Asset.ticker == normalized)
         asset = self.session.scalars(stmt).first()
         if asset:
+            if display and asset.display_ticker != display:
+                asset.display_ticker = display
+                self.session.add(asset)
             return asset
 
         asset = Asset(
             ticker=normalized,
+            display_ticker=display,
             type="crypto" if normalized.endswith("-USD") else "stock",
         )
         self.session.add(asset)

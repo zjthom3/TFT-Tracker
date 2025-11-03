@@ -8,6 +8,7 @@ from app.db.models import Asset
 from app.db.session import get_session
 from app.schemas import AssetCreate, AssetRead
 from app.dependencies.rate_limit import enforce_rate_limit
+from app.utils.tickers import resolve_ticker
 
 router = APIRouter()
 
@@ -27,18 +28,21 @@ def create_asset(
     session: Session = Depends(get_session),
     _: None = Depends(enforce_rate_limit),
 ) -> Asset:
-    exists_stmt = select(Asset).where(
-        Asset.ticker == payload.ticker, Asset.type == payload.type
-    )
+    canonical, display = resolve_ticker(payload.ticker)
+
+    exists_stmt = select(Asset).where(Asset.ticker == canonical, Asset.type == payload.type)
     existing = session.scalars(exists_stmt).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Asset {payload.ticker} ({payload.type}) already exists",
-        )
+        if display and existing.display_ticker != display:
+            existing.display_ticker = display
+            session.add(existing)
+            session.flush()
+            session.refresh(existing)
+        return existing
 
     asset = Asset(
-        ticker=payload.ticker.upper(),
+        ticker=canonical,
+        display_ticker=display,
         name=payload.name,
         type=payload.type,
         exchange=payload.exchange,

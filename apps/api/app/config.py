@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Sequence
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,11 @@ class Settings(BaseSettings):
     enable_phase_alerts: bool = True
     requests_per_minute: int = 120
     sentry_dsn: str | None = None
+    ticker_aliases: dict[str, str] = Field(
+        default_factory=lambda: {
+            "TRUMP-USD": "TRUMP35336-USD",
+        }
+    )
 
 
 @lru_cache

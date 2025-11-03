@@ -60,6 +60,7 @@ This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing
 ### Watchlist Tips
 - The dashboard defaults to tracking `NVDA` and `BTC-USD`. Edit the watchlist from the UI; entries persist in `localStorage`.
 - Each addition calls the `/assets` endpoint (creating the asset if it does not exist) and future ingests will populate snapshots automatically.
+- Common crypto aliases automatically resolve to the canonical Yahoo symbol (e.g. `TRUMP-USD` → `TRUMP35336-USD`).
 
 ## CI
 GitHub Actions run linting and tests for both services on pull requests.

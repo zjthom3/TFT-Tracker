@@ -17,6 +17,7 @@ from app.db.models import (
     SentimentObservation,
 )
 from app.config import get_settings
+from app.utils.tickers import resolve_ticker
 
 PHASE_COOP = "COOP"
 PHASE_DEFECT = "DEFECT"
@@ -249,7 +250,12 @@ class PhaseUpdateService:
         return results
 
     def update_assets_by_ticker(self, tickers: list[str]) -> list[PhaseState]:
-        normalized = [ticker.strip().upper() for ticker in tickers if ticker.strip()]
+        normalized = []
+        for ticker in tickers:
+            if ticker.strip():
+                canonical, _ = resolve_ticker(ticker)
+                normalized.append(canonical)
+        normalized = list(dict.fromkeys(normalized))
         if not normalized:
             return []
         assets = self.session.scalars(select(Asset).where(Asset.ticker.in_(normalized))).all()

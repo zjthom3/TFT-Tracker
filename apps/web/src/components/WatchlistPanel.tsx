@@ -16,6 +16,7 @@ type WatchlistPanelProps = {
   onMove(ticker: string, direction: "up" | "down"): void;
   busy?: boolean;
   error?: string | null;
+  displayOverrides?: Record<string, string>;
 };
 
 export function WatchlistPanel({
@@ -25,7 +26,8 @@ export function WatchlistPanel({
   onRemove,
   onMove,
   busy = false,
-  error
+  error,
+  displayOverrides = {}
 }: WatchlistPanelProps) {
   const [inputValue, setInputValue] = useState("");
 
@@ -92,13 +94,17 @@ export function WatchlistPanel({
         )}
         {watchlist.map((ticker, index) => {
           const assetMeta = assetDirectory.find((entry) => entry.ticker === ticker);
+          const labelTicker = displayOverrides[ticker] ?? assetMeta?.display_ticker ?? ticker;
           return (
             <li
               key={ticker}
               className="flex items-center justify-between gap-4 rounded-xl border border-neutral-800 bg-neutral-950/70 px-4 py-3"
             >
               <div>
-                <span className="font-mono text-lg text-neutral-100">{ticker}</span>
+                <span className="font-mono text-lg text-neutral-100">{labelTicker}</span>
+                {labelTicker !== ticker && (
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Canonical: {ticker}</p>
+                )}
                 {assetMeta?.name && <p className="text-xs text-neutral-500">{assetMeta.name}</p>}
               </div>
               <div className="flex items-center gap-2">

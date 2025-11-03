@@ -17,6 +17,7 @@ class AssetRead(BaseModel):
 
     id: UUID
     ticker: str
+    display_ticker: str | None = None
     name: str | None = None
     type: str
     exchange: str | None = None
@@ -62,6 +63,7 @@ class IndicatorSnapshotRead(BaseModel):
 class PhaseStateRead(BaseModel):
     asset_id: UUID
     ticker: str
+    display_ticker: str | None = None
     asset_name: str | None = None
     asset_type: str
     phase: str

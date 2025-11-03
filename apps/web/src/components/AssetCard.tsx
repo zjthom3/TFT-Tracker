@@ -3,6 +3,7 @@ import { PhaseBadge } from "@/components/PhaseBadge";
 
 export type AssetCardProps = {
   ticker: string;
+  displayTicker?: string;
   name?: string | null;
   phase: string;
   confidence?: number | null;
@@ -27,6 +28,7 @@ function formatNumber(value: number | null | undefined, digits = 2): string {
 export function AssetCard(props: AssetCardProps) {
   const {
     ticker,
+    displayTicker,
     name,
     phase,
     confidence,
@@ -50,7 +52,12 @@ export function AssetCard(props: AssetCardProps) {
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <span className="font-mono text-2xl font-semibold text-neutral-100">{ticker}</span>
+            <div className="flex flex-col">
+              <span className="font-mono text-2xl font-semibold text-neutral-100">{displayTicker ?? ticker}</span>
+              {displayTicker && displayTicker !== ticker && (
+                <span className="text-[10px] uppercase tracking-wide text-neutral-500">Canonical: {ticker}</span>
+              )}
+            </div>
             <PhaseBadge phase={phase} />
           </div>
           {name && <p className="mt-1 text-sm text-neutral-400">{name}</p>}

@@ -221,10 +221,12 @@ def test_phase_endpoints_with_classification(engine) -> None:
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["phase"] == PHASE_DEFECT
+    assert payload[0]["display_ticker"] == "NVDA"
     assert payload[0]["sentiment_score"] is not None
 
     detail = client.get("/phase/NVDA").json()
     assert detail["ticker"] == "NVDA"
+    assert detail["display_ticker"] == "NVDA"
     assert detail["sentiment_score"] == pytest.approx(0.25, rel=1e-2)
     assert detail["sentiment_delta"] == pytest.approx(0.35, rel=1e-2)
 

@@ -54,6 +54,7 @@ class Asset(Base):
     name: Mapped[Optional[str]] = mapped_column(String(255))
     type: Mapped[str] = mapped_column(String(16), default="stock")
     exchange: Mapped[Optional[str]] = mapped_column(String(64))
+    display_ticker: Mapped[Optional[str]] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

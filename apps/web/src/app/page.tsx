@@ -7,6 +7,7 @@ import { WatchlistPanel } from "@/components/WatchlistPanel";
 
 type PhaseState = {
   ticker: string;
+  display_ticker?: string | null;
   asset_name?: string | null;
   asset_type: string;
   phase: string;
@@ -39,7 +40,7 @@ export default function HomePage() {
   const [phaseStates, setPhaseStates] = useState<PhaseState[]>([]);
   const [marketSnapshots, setMarketSnapshots] = useState<MarketSnapshot[]>([]);
   const [indicatorSnapshots, setIndicatorSnapshots] = useState<IndicatorSnapshot[]>([]);
-  const [assetDirectory, setAssetDirectory] = useState<{ ticker: string; name?: string | null; type?: string | null }[]>([]);
+  const [assetDirectory, setAssetDirectory] = useState<{ ticker: string; display_ticker?: string | null; name?: string | null; type?: string | null }[]>([]);
   const [watchlist, setWatchlist] = useState<string[]>(["NVDA", "BTC-USD"]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [phaseAlerts, setPhaseAlerts] = useState<{ ticker: string; from: string | null; to: string; computedAt: string }[]>([]);
+  const [displayOverrides, setDisplayOverrides] = useState<Record<string, string>>({});
   const phaseMapRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
@@ -63,6 +65,23 @@ export default function HomePage() {
         console.warn("Failed to parse watchlist from storage", err);
       }
     }
+    const storedDisplay = window.localStorage.getItem("tft-watchlist-display");
+    if (storedDisplay) {
+      try {
+        const parsed = JSON.parse(storedDisplay) as Record<string, string>;
+        if (parsed && typeof parsed === "object") {
+          const normalized: Record<string, string> = {};
+          Object.entries(parsed).forEach(([key, value]) => {
+            if (key && value) {
+              normalized[key.toUpperCase()] = value.toUpperCase();
+            }
+          });
+          setDisplayOverrides(normalized);
+        }
+      } catch (err) {
+        console.warn("Failed to parse watchlist display overrides", err);
+      }
+    }
     setHydrated(true);
   }, []);
 
@@ -70,6 +89,11 @@ export default function HomePage() {
     if (!hydrated || typeof window === "undefined") return;
     window.localStorage.setItem("tft-watchlist", JSON.stringify(watchlist));
   }, [hydrated, watchlist]);
+
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") return;
+    window.localStorage.setItem("tft-watchlist-display", JSON.stringify(displayOverrides));
+  }, [displayOverrides, hydrated]);
 
   const track = useCallback((event: string, payload: Record<string, unknown>) => {
     const body = { event, payload, timestamp: new Date().toISOString() };
@@ -94,8 +118,18 @@ export default function HomePage() {
     try {
       const response = await fetch(`${API_BASE}/assets`);
       if (!response.ok) return;
-      const payload = (await response.json()) as { ticker: string; name?: string | null; type?: string | null }[];
-      setAssetDirectory(payload);
+      const payload = (await response.json()) as {
+        ticker: string;
+        display_ticker?: string | null;
+        name?: string | null;
+        type?: string | null;
+      }[];
+      const normalized = payload.map((entry) => ({
+        ...entry,
+        ticker: entry.ticker.toUpperCase(),
+        display_ticker: entry.display_ticker?.toUpperCase() ?? entry.ticker.toUpperCase()
+      }));
+      setAssetDirectory(normalized);
     } catch (err) {
       console.warn("Failed to load asset directory", err);
     }
@@ -150,6 +184,20 @@ export default function HomePage() {
       const phasePayload = (await phaseRes.json()) as PhaseState[];
       const marketPayload = (await marketRes.json()) as MarketSnapshot[];
       const indicatorPayload = (await indicatorRes.json()) as IndicatorSnapshot[];
+
+      if (phasePayload.length) {
+        setDisplayOverrides((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          phasePayload.forEach((entry) => {
+            if (entry.display_ticker && entry.display_ticker !== entry.ticker && !next[entry.ticker]) {
+              next[entry.ticker] = entry.display_ticker.toUpperCase();
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
+      }
 
       if (PHASE_ALERTS_ENABLED) {
         const previousMap = phaseMapRef.current;
@@ -213,10 +261,12 @@ export default function HomePage() {
           type: ticker.includes("-") ? "crypto" : "stock"
         })
       });
-      if (!response.ok && response.status !== 409) {
+      if (!response.ok) {
         const message = await response.text();
         throw new Error(message || "Asset registration failed");
       }
+      const data = await response.json();
+      return data as { ticker: string; display_ticker?: string | null };
     } catch (err) {
       throw err instanceof Error ? err : new Error("Asset registration failed");
     }
@@ -224,25 +274,33 @@ export default function HomePage() {
 
   const handleAddTicker = useCallback(
     async (inputTicker: string) => {
-      const ticker = inputTicker.trim().toUpperCase();
-      if (!ticker) return;
-      if (!/^[-A-Z0-9\.]{1,12}$/.test(ticker)) {
+      const rawTicker = inputTicker.trim().toUpperCase();
+      if (!rawTicker) return;
+      if (!/^[-A-Z0-9\.]{1,18}$/.test(rawTicker)) {
         setFormError("Ticker should be alphanumeric (dashes and dots allowed).");
-        return;
-      }
-      if (watchlist.includes(ticker)) {
-        setFormError(`${ticker} is already on your watchlist.`);
         return;
       }
 
       setAddBusy(true);
       setFormError(null);
       try {
-        await ensureAssetExists(ticker);
-        setWatchlist((prev) => [...prev, ticker]);
-        setFeedback({ type: "success", message: `${ticker} added to watchlist.` });
-        track("watchlist_add", { ticker });
-        await triggerIngest([ticker]);
+        const asset = await ensureAssetExists(rawTicker);
+        const canonicalTicker = asset.ticker.toUpperCase();
+        if (watchlist.includes(canonicalTicker)) {
+          setFormError(`${canonicalTicker} is already on your watchlist.`);
+          return;
+        }
+
+        const displayTicker = asset.display_ticker?.toUpperCase() ?? rawTicker;
+
+        setWatchlist((prev) => [...prev, canonicalTicker]);
+        if (displayTicker !== canonicalTicker) {
+          setDisplayOverrides((prev) => ({ ...prev, [canonicalTicker]: displayTicker }));
+        }
+
+        setFeedback({ type: "success", message: `${displayTicker} added to watchlist.` });
+        track("watchlist_add", { input: rawTicker, canonical: canonicalTicker });
+        await triggerIngest([canonicalTicker]);
         await loadData();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unable to add ticker.";
@@ -260,6 +318,11 @@ export default function HomePage() {
       setWatchlist((prev) => prev.filter((item) => item !== ticker));
       track("watchlist_remove", { ticker });
       setFeedback({ type: "success", message: `${ticker} removed from watchlist.` });
+      setDisplayOverrides((prev) => {
+        if (!(ticker in prev)) return prev;
+        const { [ticker]: _ignored, ...rest } = prev;
+        return rest;
+      });
     },
     [track]
   );
@@ -304,9 +367,16 @@ export default function HomePage() {
       const market = marketByTicker[ticker];
       const indicator = indicatorByTicker[ticker];
       const awaitingData = !phase;
+      const displayTicker =
+        displayOverrides[ticker] ??
+        (phase?.display_ticker ? phase.display_ticker.toUpperCase() : undefined) ??
+        (assetDirectoryMap[ticker]?.display_ticker
+          ? assetDirectoryMap[ticker]?.display_ticker?.toUpperCase()
+          : undefined);
 
       return {
         ticker,
+        displayTicker: displayTicker ?? ticker,
         name: phase?.asset_name ?? assetDirectoryMap[ticker]?.name ?? null,
         phase: awaitingData ? "AWAITING" : phase.phase,
         confidence: phase?.confidence ?? null,
@@ -323,7 +393,7 @@ export default function HomePage() {
         updatedAt: phase?.computed_at ?? market?.as_of ?? null
       } satisfies AssetCardProps;
     });
-  }, [assetDirectoryMap, indicatorByTicker, marketByTicker, phaseByTicker, watchlist]);
+  }, [assetDirectoryMap, displayOverrides, indicatorByTicker, marketByTicker, phaseByTicker, watchlist]);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-8 px-6 py-12">
@@ -393,6 +463,7 @@ export default function HomePage() {
         onMove={handleMoveTicker}
         busy={addBusy}
         error={formError}
+        displayOverrides={displayOverrides}
       />
 
       {loading ? (

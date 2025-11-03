@@ -73,6 +73,7 @@ def list_phase_states(
             PhaseStateRead(
                 asset_id=state.asset_id,
                 ticker=asset.ticker,
+                display_ticker=asset.display_ticker or asset.ticker,
                 asset_name=asset.name,
                 asset_type=asset.type,
                 phase=state.phase,
@@ -116,6 +117,7 @@ def get_phase_state(
     return PhaseStateRead(
         asset_id=asset.id,
         ticker=asset.ticker,
+        display_ticker=asset.display_ticker or asset.ticker,
         asset_name=asset.name,
         asset_type=asset.type,
         phase=state.phase,

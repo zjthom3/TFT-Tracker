@@ -12,16 +12,22 @@ from app.services.classify_phase import PhaseUpdateService
 from app.services.ingest_market import MarketIngestor
 from app.services.sentiment import SentimentIngestor, SentimentSummary
 from app.dependencies.rate_limit import enforce_rate_limit
+from app.utils.tickers import resolve_ticker
 
 router = APIRouter()
 
 
 def _resolve_tickers(session: Session, request_tickers: list[str] | None, default_tickers: Sequence[str]) -> list[str]:
-    tickers: set[str] = set(
-        ticker.strip().upper() for ticker in default_tickers if ticker and ticker.strip()
-    )
+    tickers: set[str] = set()
+    for ticker in default_tickers:
+        if ticker and ticker.strip():
+            canonical, _ = resolve_ticker(ticker)
+            tickers.add(canonical)
     if request_tickers:
-        tickers.update(t.strip().upper() for t in request_tickers if t and t.strip())
+        for ticker in request_tickers:
+            if ticker and ticker.strip():
+                canonical, _ = resolve_ticker(ticker)
+                tickers.add(canonical)
     if not tickers:
         tickers = {row[0] for row in session.execute(select(Asset.ticker)).all() if row[0]}
     return sorted(tickers)
