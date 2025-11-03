@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,7 +14,9 @@ from app.db.models import (
     MarketSnapshot,
     PhaseHistory,
     PhaseState,
+    SentimentObservation,
 )
+from app.config import get_settings
 
 PHASE_COOP = "COOP"
 PHASE_DEFECT = "DEFECT"
@@ -40,6 +43,7 @@ class PhaseClassifier:
 
     def __init__(self, session: Session) -> None:
         self.session = session
+        self.settings = get_settings()
 
     def evaluate(self, asset: Asset, previous_state: Optional[PhaseState]) -> Optional[PhaseResult]:
         market_snapshots = list(
@@ -72,12 +76,21 @@ class PhaseClassifier:
         rsi_current = self._to_float(current_indicator.rsi_14) if current_indicator else None
         rsi_previous = self._to_float(previous_indicator.rsi_14) if previous_indicator else None
 
+        sentiment_current = None
+        sentiment_previous = None
+        sentiment_stale = False
+        if self.settings.enable_sentiment:
+            sentiment_current, sentiment_previous, sentiment_stale = self._resolve_sentiment(asset.id)
+
         phase, confidence, rationale = self._determine_phase(
             price_change_pct=price_change_pct,
             rsi_current=rsi_current,
             rsi_previous=rsi_previous,
             volatility_delta=volatility_delta,
             previous_phase=previous_state.phase if previous_state else None,
+            sentiment_current=sentiment_current,
+            sentiment_previous=sentiment_previous,
+            sentiment_stale=sentiment_stale,
         )
 
         computed_at = current_market.as_of
@@ -91,6 +104,9 @@ class PhaseClassifier:
         rsi_previous: Optional[float],
         volatility_delta: Optional[float],
         previous_phase: Optional[str],
+        sentiment_current: Optional[float],
+        sentiment_previous: Optional[float],
+        sentiment_stale: bool,
     ) -> tuple[str, float, str]:
         reasons: list[str] = []
         confidence = 0.55
@@ -103,6 +119,9 @@ class PhaseClassifier:
         if rsi_current is not None and rsi_current < self.RSI_LOW:
             defect_triggers += 1
             reasons.append(f"RSI {rsi_current:.1f} below {self.RSI_LOW}")
+        if sentiment_current is not None and sentiment_current <= -0.2:
+            defect_triggers += 1
+            reasons.append(f"Negative sentiment {sentiment_current:.2f}")
 
         if defect_triggers:
             confidence = min(0.6 + defect_triggers * 0.12, 0.95)
@@ -119,6 +138,12 @@ class PhaseClassifier:
                     forgiveness_reasons.append("RSI rising")
                 elif rsi_current >= self.RSI_FLOOR:
                     forgiveness_reasons.append(f"RSI recovered above {self.RSI_FLOOR}")
+            if (
+                sentiment_current is not None
+                and sentiment_previous is not None
+                and sentiment_current - sentiment_previous >= 0.1
+            ):
+                forgiveness_reasons.append("Sentiment recovering")
 
             if forgiveness_reasons:
                 confidence = min(0.62 + len(forgiveness_reasons) * 0.1, 0.9)
@@ -133,6 +158,8 @@ class PhaseClassifier:
             coop_reasons.append("RSI in neutral range")
         if volatility_delta is not None and volatility_delta < 0:
             coop_reasons.append("Volatility trending down")
+        if sentiment_current is not None and sentiment_current >= 0.15:
+            coop_reasons.append("Positive sentiment backdrop")
 
         if coop_reasons:
             confidence = min(0.6 + len(coop_reasons) * 0.1, 0.9)
@@ -146,6 +173,8 @@ class PhaseClassifier:
         else:
             fallback_reason = "Insufficient new evidence; carrying forward previous phase"
         confidence = 0.45 if previous_phase else 0.5
+        if sentiment_stale:
+            confidence = max(confidence - 0.05, 0.3)
         return fallback_phase, confidence, fallback_reason
 
     def _resolve_price_change(
@@ -174,6 +203,24 @@ class PhaseClassifier:
         if value is None:
             return None
         return float(value)
+
+    def _resolve_sentiment(self, asset_id: UUID) -> tuple[Optional[float], Optional[float], bool]:
+        observations = list(
+            self.session.scalars(
+                select(SentimentObservation)
+                .where(SentimentObservation.asset_id == asset_id)
+                .order_by(SentimentObservation.observed_at.desc())
+                .limit(2)
+            )
+        )
+        if not observations:
+            return None, None, False
+
+        current = observations[0]
+        previous = observations[1] if len(observations) > 1 else None
+        now = datetime.now(timezone.utc)
+        stale = (now - current.observed_at) > timedelta(minutes=self.settings.sentiment_window_minutes * 2)
+        return current.score, previous.score if previous else None, stale
 
 
 class PhaseUpdateService:

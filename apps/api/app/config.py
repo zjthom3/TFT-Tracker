@@ -17,6 +17,11 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     )
+    enable_sentiment: bool = True
+    sentiment_window_minutes: int = 60
+    enable_phase_alerts: bool = True
+    requests_per_minute: int = 120
+    sentry_dsn: str | None = None
 
 
 @lru_cache

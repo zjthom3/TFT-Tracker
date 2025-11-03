@@ -31,6 +31,7 @@ class IngestResult(BaseModel):
     indicator_records: int = Field(..., description="Number of indicator snapshots inserted")
     phase: str | None = Field(default=None, description="Latest detected phase after ingest")
     phase_confidence: float | None = Field(default=None, description="Confidence for the detected phase")
+    sentiment_score: float | None = Field(default=None, description="Average sentiment score for the ingest window")
 
 
 class MarketSnapshotRead(BaseModel):

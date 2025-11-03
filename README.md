@@ -61,4 +61,14 @@ GitHub Actions run linting and tests for both services on pull requests.
 ## Environment
 Default environment variables are defined in `apps/api/app/config.py`. Override via `.env` files or shell environment.
 
-Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`).
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TFT_ENABLE_SENTIMENT` | Toggle Yahoo News/VADER sentiment weighting | `true` |
+| `TFT_SENTIMENT_WINDOW_MINUTES` | Lookback window (minutes) for sentiment fetch | `60` |
+| `TFT_ENABLE_PHASE_ALERTS` | Enable server-side alert processing | `true` |
+| `TFT_REQUESTS_PER_MINUTE` | In-memory rate limit (per IP) | `120` |
+| `TFT_SENTRY_DSN` | Optional DSN for Sentry error/trace monitoring | _unset_ |
+
+Frontend reads the API host from `NEXT_PUBLIC_API_BASE` (defaults to `http://localhost:8000`) and phase alerts can be toggled via `NEXT_PUBLIC_PHASE_ALERTS`.
+
+Operational checklists live under `docs/QA_CHECKLIST.md` and `docs/RELEASE_RUNBOOK.md`.

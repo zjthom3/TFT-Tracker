@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, IndicatorSnapshot, MarketSnapshot
 from app.db.session import get_session
 from app.schemas import IndicatorSnapshotRead, MarketSnapshotRead
+from app.dependencies.rate_limit import enforce_rate_limit
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ def _ticker_filter_clause(stmt: Select, tickers: Iterable[str]) -> Select:
 def latest_market_snapshots(
     tickers: list[str] | None = Query(default=None, description="Optional list of tickers to filter"),
     session: Session = Depends(get_session),
+    _: None = Depends(enforce_rate_limit),
 ) -> list[MarketSnapshotRead]:
     latest_subquery = (
         select(
@@ -68,6 +70,7 @@ def latest_market_snapshots(
 def latest_indicator_snapshots(
     tickers: list[str] | None = Query(default=None, description="Optional list of tickers to filter"),
     session: Session = Depends(get_session),
+    _: None = Depends(enforce_rate_limit),
 ) -> list[IndicatorSnapshotRead]:
     latest_subquery = (
         select(

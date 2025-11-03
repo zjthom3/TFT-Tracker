@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.models import Asset, Base, IndicatorSnapshot, MarketSnapshot, PhaseHistory
 from app.db.session import get_session
+from app.dependencies.rate_limit import enforce_rate_limit
 from app.main import create_app
 from app.services.classify_phase import PhaseUpdateService, PHASE_COOP, PHASE_DEFECT, PHASE_FORGIVE
 
@@ -176,6 +177,7 @@ def test_phase_endpoints_with_classification(engine) -> None:
             yield override
 
     app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[enforce_rate_limit] = lambda: None
 
     client = TestClient(app)
     response = client.get("/phase")
@@ -189,3 +191,4 @@ def test_phase_endpoints_with_classification(engine) -> None:
 
     history = client.get("/phase/NVDA/history").json()
     assert history and history[0]["to_phase"] == PHASE_DEFECT
+    app.dependency_overrides.pop(enforce_rate_limit, None)

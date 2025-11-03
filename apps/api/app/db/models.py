@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    JSON,
     Numeric,
     String,
     TypeDecorator,
@@ -70,6 +71,9 @@ class Asset(Base):
     )
     phase_history: Mapped[list["PhaseHistory"]] = relationship(
         back_populates="asset", cascade="all, delete-orphan", order_by="PhaseHistory.changed_at"
+    )
+    sentiment_observations: Mapped[list["SentimentObservation"]] = relationship(
+        back_populates="asset", cascade="all, delete-orphan"
     )
 
 
@@ -148,3 +152,38 @@ class PhaseHistory(Base):
     )
 
     asset: Mapped[Asset] = relationship(back_populates="phase_history")
+
+
+class SentimentSource(Base):
+    __tablename__ = "sentiment_source"
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    channel: Mapped[str] = mapped_column(String(32), nullable=False)
+    reliability_tier: Mapped[Optional[str]] = mapped_column(String(8))
+    meta: Mapped[Optional[dict]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    observations: Mapped[list["SentimentObservation"]] = relationship(
+        back_populates="source", cascade="all, delete-orphan"
+    )
+
+
+class SentimentObservation(Base):
+    __tablename__ = "sentiment_observation"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "source_id", "observed_at", name="uq_sentiment_unique"),
+    )
+
+    id: Mapped[UUID] = mapped_column(GUID(), primary_key=True, default=uuid4)
+    asset_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("assets.id", ondelete="CASCADE"), nullable=False)
+    source_id: Mapped[UUID] = mapped_column(GUID(), ForeignKey("sentiment_source.id", ondelete="RESTRICT"), nullable=False)
+    score: Mapped[Optional[float]] = mapped_column(Float)
+    magnitude: Mapped[Optional[float]] = mapped_column(Float)
+    features: Mapped[dict] = mapped_column(JSON, default=dict)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    asset: Mapped[Asset] = relationship(back_populates="sentiment_observations")
+    source: Mapped[SentimentSource] = relationship(back_populates="observations")

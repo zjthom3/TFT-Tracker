@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, PhaseHistory, PhaseState
 from app.db.session import get_session
 from app.schemas import PhaseHistoryRead, PhaseStateRead
+from app.dependencies.rate_limit import enforce_rate_limit
 
 router = APIRouter()
 
@@ -27,6 +28,7 @@ def _asset_by_ticker(session: Session, ticker: str) -> Asset:
 def list_phase_states(
     tickers: list[str] | None = Query(default=None, description="Optional tickers to filter"),
     session: Session = Depends(get_session),
+    _: None = Depends(enforce_rate_limit),
 ) -> list[PhaseStateRead]:
     stmt: Select = (
         select(PhaseState, Asset)
@@ -55,7 +57,11 @@ def list_phase_states(
 
 
 @router.get("/phase/{ticker}", response_model=PhaseStateRead)
-def get_phase_state(ticker: str, session: Session = Depends(get_session)) -> PhaseStateRead:
+def get_phase_state(
+    ticker: str,
+    session: Session = Depends(get_session),
+    _: None = Depends(enforce_rate_limit),
+) -> PhaseStateRead:
     asset = _asset_by_ticker(session, ticker)
     state = session.get(PhaseState, asset.id)
     if state is None:
@@ -81,6 +87,7 @@ def get_phase_history(
     ticker: str,
     limit: int = Query(default=20, ge=1, le=200),
     session: Session = Depends(get_session),
+    _: None = Depends(enforce_rate_limit),
     since_minutes: Optional[int] = Query(default=None, ge=1),
 ) -> list[PhaseHistoryRead]:
     asset = _asset_by_ticker(session, ticker)

@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("phase", sa.String(length=16), nullable=False),
         sa.Column("confidence", sa.Float(), nullable=True),
         sa.Column("rationale", sa.String(length=512), nullable=True),
-        sa.Column("computed_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("computed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["asset_id"], ["assets.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("asset_id"),
     )
@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("to_phase", sa.String(length=16), nullable=False),
         sa.Column("confidence", sa.Float(), nullable=True),
         sa.Column("rationale", sa.String(length=512), nullable=True),
-        sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["asset_id"], ["assets.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -48,7 +48,6 @@ def upgrade() -> None:
         ["asset_id", "changed_at"],
         unique=False,
     )
-
 
 def downgrade() -> None:
     op.drop_index("ix_phase_history_asset_time", table_name="phase_history")

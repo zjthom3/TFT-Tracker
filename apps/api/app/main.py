@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from app.config import get_settings
 from app.db.session import init_database
@@ -10,6 +13,13 @@ from app.routers import assets, health, ingest, phase, snapshots
 
 def create_app(init_db: bool = True) -> FastAPI:
     settings = get_settings()
+
+    if settings.sentry_dsn and not sentry_sdk.Hub.current.client:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+            traces_sample_rate=0.2,
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):

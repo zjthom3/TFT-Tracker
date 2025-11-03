@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AssetCard, type AssetCardProps } from "@/components/AssetCard";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
 
@@ -30,6 +30,7 @@ type IndicatorSnapshot = {
 };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const PHASE_ALERTS_ENABLED = process.env.NEXT_PUBLIC_PHASE_ALERTS !== "false";
 
 export default function HomePage() {
   const [phaseStates, setPhaseStates] = useState<PhaseState[]>([]);
@@ -43,6 +44,8 @@ export default function HomePage() {
   const [addBusy, setAddBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [phaseAlerts, setPhaseAlerts] = useState<{ ticker: string; from: string | null; to: string; computedAt: string }[]>([]);
+  const phaseMapRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -94,6 +97,7 @@ export default function HomePage() {
         setMarketSnapshots([]);
         setIndicatorSnapshots([]);
         setError(null);
+        phaseMapRef.current = {};
         return;
       }
 
@@ -112,6 +116,28 @@ export default function HomePage() {
       const marketPayload = (await marketRes.json()) as MarketSnapshot[];
       const indicatorPayload = (await indicatorRes.json()) as IndicatorSnapshot[];
 
+      if (PHASE_ALERTS_ENABLED) {
+        const previousMap = phaseMapRef.current;
+        const changes = phasePayload
+          .filter((entry) => {
+            const previousPhase = previousMap[entry.ticker];
+            return previousPhase && previousPhase !== entry.phase;
+          })
+          .map((entry) => ({
+            ticker: entry.ticker,
+            from: phaseMapRef.current[entry.ticker],
+            to: entry.phase,
+            computedAt: entry.computed_at
+          }));
+
+        if (changes.length) {
+          setPhaseAlerts((prev) => [...changes, ...prev].slice(0, 5));
+          changes.forEach((change) => track("phase_change", change));
+        }
+      }
+
+      phaseMapRef.current = Object.fromEntries(phasePayload.map((entry) => [entry.ticker, entry.phase]));
+
       setPhaseStates(phasePayload);
       setMarketSnapshots(marketPayload);
       setIndicatorSnapshots(indicatorPayload);
@@ -122,7 +148,7 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [watchlist]);
+  }, [track, watchlist]);
 
   useEffect(() => {
     loadData();
@@ -135,6 +161,12 @@ export default function HomePage() {
     const timeout = setTimeout(() => setFeedback(null), 4000);
     return () => clearTimeout(timeout);
   }, [feedback]);
+
+  useEffect(() => {
+    if (!phaseAlerts.length) return;
+    const timeout = setTimeout(() => setPhaseAlerts((prev) => prev.slice(0, Math.max(prev.length - 1, 0))), 5000);
+    return () => clearTimeout(timeout);
+  }, [phaseAlerts]);
 
   const ensureAssetExists = useCallback(async (ticker: string) => {
     try {
@@ -291,6 +323,20 @@ export default function HomePage() {
           } p-4 text-sm`}
         >
           {feedback.message}
+        </div>
+      )}
+
+      {phaseAlerts.length > 0 && (
+        <div className="space-y-2" aria-live="polite">
+          {phaseAlerts.map((alert, index) => (
+            <div
+              key={`${alert.ticker}-${alert.computedAt}-${index}`}
+              className="rounded-xl border border-coop/40 bg-coop/10 p-4 text-sm text-coop shadow-[0_0_20px_theme(colors.coop/15)]"
+            >
+              <strong className="font-mono">{alert.ticker}</strong> transitioned from {alert.from ?? "UNKNOWN"} → {alert.to}
+              <span className="ml-2 text-xs text-neutral-500">{new Date(alert.computedAt).toLocaleTimeString()}</span>
+            </div>
+          ))}
         </div>
       )}
 
