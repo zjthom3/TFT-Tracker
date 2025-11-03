@@ -51,6 +51,10 @@ curl -X POST http://localhost:8000/ingest/run
 ```
 This triggers the market ingest workflow for seeded tickers (NVDA, BTC), storing market and indicator snapshots and recalculating their current Tit-for-Tat phase state.
 
+### Watchlist Tips
+- The dashboard defaults to tracking `NVDA` and `BTC-USD`. Edit the watchlist from the UI; entries persist in `localStorage`.
+- Each addition calls the `/assets` endpoint (creating the asset if it does not exist) and future ingests will populate snapshots automatically.
+
 ## CI
 GitHub Actions run linting and tests for both services on pull requests.
 

@@ -10,8 +10,9 @@ export type AssetCardProps = {
   price?: number | null;
   priceChangePct?: number | null;
   rsi?: number | null;
-  updatedAt: string;
+  updatedAt?: string | null;
   volatility?: number | null;
+  statusMessage?: string | null;
 };
 
 function formatNumber(value: number | null | undefined, digits = 2): string {
@@ -32,10 +33,13 @@ export function AssetCard(props: AssetCardProps) {
     priceChangePct,
     rsi,
     updatedAt,
-    volatility
+    volatility,
+    statusMessage
   } = props;
 
-  const updatedDistance = formatDistanceToNow(new Date(updatedAt), { addSuffix: true });
+  const updatedDistance = updatedAt
+    ? formatDistanceToNow(new Date(updatedAt), { addSuffix: true })
+    : "Pending ingest";
 
   return (
     <article className="group relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 transition-transform hover:-translate-y-1 hover:border-neutral-700 hover:shadow-xl">
@@ -67,13 +71,15 @@ export function AssetCard(props: AssetCardProps) {
         <Metric label="Last updated" value={updatedDistance} />
       </div>
 
-      {rationale && (
+      {(statusMessage || rationale) && (
         <p className="mt-6 rounded-lg border border-neutral-800 bg-neutral-900/60 p-4 text-sm text-neutral-300">
-          {rationale}
+          {statusMessage ?? rationale}
         </p>
       )}
 
-      <div className="mt-4 text-xs text-neutral-500">Updated {new Date(updatedAt).toLocaleString()}</div>
+      <div className="mt-4 text-xs text-neutral-500">
+        Updated {updatedAt ? new Date(updatedAt).toLocaleString() : "once data is available"}
+      </div>
     </article>
   );
 }

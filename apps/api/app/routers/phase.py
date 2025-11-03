@@ -24,12 +24,20 @@ def _asset_by_ticker(session: Session, ticker: str) -> Asset:
 
 
 @router.get("/phase", response_model=list[PhaseStateRead])
-def list_phase_states(session: Session = Depends(get_session)) -> list[PhaseStateRead]:
+def list_phase_states(
+    tickers: list[str] | None = Query(default=None, description="Optional tickers to filter"),
+    session: Session = Depends(get_session),
+) -> list[PhaseStateRead]:
     stmt: Select = (
         select(PhaseState, Asset)
         .join(Asset, PhaseState.asset_id == Asset.id)
         .order_by(Asset.ticker.asc())
     )
+
+    if tickers:
+        normalized = [t.strip().upper() for t in tickers if t.strip()]
+        if normalized:
+            stmt = stmt.where(Asset.ticker.in_(normalized))
     rows = session.execute(stmt).all()
     return [
         PhaseStateRead(
